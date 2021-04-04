@@ -18,20 +18,14 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type grpcRelay interface {
-	relay.BotRelay
-	gen.ConnectorServer
-}
-
 type fcmRelay struct {
 	gen.UnimplementedConnectorServer
-	users  []*gen.User
-	user   *gen.User
-	app    *firebase.App
-	client *messaging.Client
-	token  string
-	config fcmRelayConfig
-	//sourceRelay grpcRelay
+	users        []*gen.User
+	user         *gen.User
+	app          *firebase.App
+	client       *messaging.Client
+	token        string
+	config       fcmRelayConfig
 	store        *firestore.Client
 	db           *db.Client
 	topic        string
@@ -88,7 +82,14 @@ func NewFCMRelay(config interface{}) relay.BotRelay {
 	}
 }
 
+func (f *fcmRelay) Ping(context.Context, *empty.Empty) (*empty.Empty, error) {
+	return &empty.Empty{}, nil
+}
+
 func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
+	if !f.config.Grpc.TLS.Enabled {
+		return errors.New("can't start: TLS must be enabled")
+	}
 	f.user = botUser
 	f.users = users
 	var err error
