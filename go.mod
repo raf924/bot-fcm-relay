@@ -3,7 +3,7 @@ module github.com/raf924/bot-fcm-relay
 go 1.16
 
 require (
-	cloud.google.com/go/firestore v1.1.1
+	cloud.google.com/go/firestore v1.5.0
 	firebase.google.com/go/v4 v4.4.0
 	github.com/golang/protobuf v1.5.0
 	github.com/raf924/bot v1.0.0-alpha.13
