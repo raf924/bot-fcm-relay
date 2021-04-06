@@ -8,6 +8,7 @@ type fcmRelayConfig struct {
 	ServiceAccountId string              `yaml:"serviceAccountId"`
 	CredentialsFile  string              `yaml:"credentialsFile"`
 	Topic            string              `yaml:"topic"`
+	ServerName       string              `yaml:"serverName"`
 	Grpc             pkg.GrpcRelayConfig `yaml:"grpc"`
 	DatabaseURL      string              `yaml:"databaseUrl"`
 }

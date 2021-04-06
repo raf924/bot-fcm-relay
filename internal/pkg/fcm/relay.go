@@ -106,13 +106,19 @@ func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
 	if err != nil {
 		return err
 	}
-	f.db, err = f.app.Database(context.TODO())
-	if err != nil {
-		return err
-	}
 	f.client, err = f.app.Messaging(context.TODO())
 	if err != nil {
 		return err
+	}
+	if len(f.config.ServerName) > 0 {
+		err := CheckPairing(f.config)
+		if err != nil {
+			return err
+		}
+		err = UpdateFirestore(f.store, f.config.ServerName)
+		if err != nil {
+			return err
+		}
 	}
 	return server.StartServer(f, f.config.Grpc)
 }
