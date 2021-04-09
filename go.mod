@@ -10,7 +10,7 @@ require (
 	github.com/raf924/bot-grpc-relay v1.0.0-alpha.16
 	github.com/raf924/connector-api v1.0.0-alpha.3
 	google.golang.org/api v0.43.0
-	google.golang.org/grpc v1.36.1
+	google.golang.org/grpc v1.37.0
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/yaml.v2 v2.4.0
 	gosrc.io/xmpp v0.5.1
