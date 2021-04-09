@@ -8,6 +8,7 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/db"
 	"firebase.google.com/go/v4/messaging"
+	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/raf924/bot-grpc-relay/pkg/server"
 	"github.com/raf924/bot/pkg/relay"
@@ -16,6 +17,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v2"
+	"net"
 )
 
 type fcmRelay struct {
@@ -110,8 +112,12 @@ func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
 	if err != nil {
 		return err
 	}
+	l, err := net.Listen("tcp", fmt.Sprintf(":%d", f.config.Grpc.Port))
+	if err != nil {
+		return err
+	}
 	if len(f.config.ServerName) > 0 {
-		err := CheckPairing(f.config)
+		err := CheckPairing(l, f.config)
 		if err != nil {
 			return err
 		}
@@ -120,7 +126,7 @@ func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
 			return err
 		}
 	}
-	return server.StartServer(f, f.config.Grpc)
+	return server.StartServer(l, f, f.config.Grpc)
 }
 
 func (f *fcmRelay) send(payloadType string, v proto.Message) error {

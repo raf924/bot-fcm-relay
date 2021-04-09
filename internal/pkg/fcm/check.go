@@ -9,32 +9,46 @@ import (
 	"time"
 )
 
-func LookupPortFromDNS(serverName string) (host string, port int, err error) {
-	_, addrs, err := net.LookupSRV("", "", fmt.Sprintf("_hc._grpc.%s", serverName))
-	if err != nil {
-		return "", 0, err
-	}
-	addr := addrs[0]
-	return strings.TrimRight(addr.Target, "."), int(addr.Port), nil
+type SRVHost struct {
+	Host string
+	Port int
 }
 
-func CheckPairing(config fcmRelayConfig) error {
-	host, port, err := LookupPortFromDNS(config.ServerName)
+func LookupPortFromDNS(serverName string) ([]SRVHost, error) {
+	_, addrs, err := net.LookupSRV("", "", fmt.Sprintf("_hc._grpc.%s", serverName))
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no matching SRV records")
+	}
+	var hosts []SRVHost
+	for _, addr := range addrs {
+		hosts = append(hosts, SRVHost{
+			Host: strings.TrimRight(addr.Target, "."),
+			Port: int(addr.Port),
+		})
+	}
+	return hosts, nil
+}
+
+func CheckPairing(l net.Listener, config fcmRelayConfig) error {
+	hosts, err := LookupPortFromDNS(config.ServerName)
 	if err != nil {
 		println("Warning:", config.ServerName, "doesn't have the required SRV record. This relay will have to be added manually to the app")
 		return nil
 	}
-	return CheckConnection(host, port)
+	for _, host := range hosts {
+		if err := CheckConnection(l, host.Host, host.Port); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("no SRV records match this relay")
 }
 
-const checkTimeout = time.Second * 3
+var checkTimeout = time.Second * 20
 
-func CheckConnection(host string, port int) error {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return err
-	}
-	defer l.Close()
+func CheckConnection(l net.Listener, host string, port int) error {
 	sameChan := make(chan bool)
 	dConn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), checkTimeout)
 	if err != nil {
