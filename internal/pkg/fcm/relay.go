@@ -11,30 +11,33 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/raf924/bot-grpc-relay/pkg/server"
-	"github.com/raf924/bot/pkg/relay"
+	"github.com/raf924/bot/pkg/queue"
 	"github.com/raf924/connector-api/pkg/gen"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 	"gopkg.in/yaml.v2"
+	"log"
 	"net"
 )
 
 type fcmRelay struct {
 	gen.UnimplementedConnectorServer
-	users        []*gen.User
-	user         *gen.User
-	app          *firebase.App
-	client       *messaging.Client
-	token        string
-	config       fcmRelayConfig
-	store        *firestore.Client
-	db           *db.Client
-	topic        string
-	messageQueue MessageQueue
+	users             []*gen.User
+	user              *gen.User
+	app               *firebase.App
+	client            *messaging.Client
+	token             string
+	config            RelayConfig
+	store             *firestore.Client
+	db                *db.Client
+	topic             string
+	messageConsumer   *queue.Consumer
+	messageProducer   *queue.Producer
+	connectorExchange *queue.Exchange
 }
 
-func (f *fcmRelay) Register(ctx context.Context, packet *gen.RegistrationPacket) (*gen.ConfirmationPacket, error) {
+func (f *fcmRelay) Register(ctx context.Context, _ *gen.RegistrationPacket) (*gen.ConfirmationPacket, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errors.New("no metadata")
@@ -44,43 +47,45 @@ func (f *fcmRelay) Register(ctx context.Context, packet *gen.RegistrationPacket)
 		return nil, errors.New("topic metadata must have a value")
 	}
 	f.topic = values[0]
-	println("Topic is", f.topic)
+	log.Println("Topic is", f.topic)
 	return &gen.ConfirmationPacket{
 		BotUser: f.user,
 		Users:   f.users,
 	}, nil
 }
 
-func (f *fcmRelay) ReadMessages(empty *empty.Empty, server gen.Connector_ReadMessagesServer) error {
+func (f *fcmRelay) ReadMessages(_ *empty.Empty, _ gen.Connector_ReadMessagesServer) error {
 	return nil
 }
 
-func (f *fcmRelay) ReadCommands(empty *empty.Empty, server gen.Connector_ReadCommandsServer) error {
+func (f *fcmRelay) ReadCommands(_ *empty.Empty, _ gen.Connector_ReadCommandsServer) error {
 	return nil
 }
 
-func (f *fcmRelay) ReadUserEvents(empty *empty.Empty, server gen.Connector_ReadUserEventsServer) error {
+func (f *fcmRelay) ReadUserEvents(_ *empty.Empty, _ gen.Connector_ReadUserEventsServer) error {
 	return nil
 }
 
-func (f *fcmRelay) SendMessage(ctx context.Context, packet *gen.BotPacket) (*empty.Empty, error) {
-	f.messageQueue.Push(packet)
-	return &empty.Empty{}, nil
+func (f *fcmRelay) SendMessage(_ context.Context, packet *gen.BotPacket) (*empty.Empty, error) {
+	return &empty.Empty{}, f.messageProducer.Produce(packet)
 }
 
-func NewFCMRelay(config interface{}) relay.BotRelay {
+func NewFCMRelay(config interface{}, connectorExchange *queue.Exchange) *fcmRelay {
 	data, err := yaml.Marshal(config)
 	if err != nil {
 		panic(err)
 	}
-	var conf fcmRelayConfig
+	var conf RelayConfig
 	if err := yaml.Unmarshal(data, &conf); err != nil {
 		panic(err)
 	}
+	return newFCMRelay(conf, connectorExchange)
+}
+
+func newFCMRelay(config RelayConfig, connectorExchange *queue.Exchange) *fcmRelay {
 	return &fcmRelay{
-		config:       conf,
-		messageQueue: NewMessageQueue(),
-		//sourceRelay: pkg.NewGrpcBotRelay(conf.Grpc),
+		config:            config,
+		connectorExchange: connectorExchange,
 	}
 }
 
@@ -88,10 +93,10 @@ func (f *fcmRelay) Ping(context.Context, *empty.Empty) (*empty.Empty, error) {
 	return &empty.Empty{}, nil
 }
 
-func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
-	if !f.config.Grpc.TLS.Enabled {
+func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User, _ string) error {
+	/*if !f.config.Grpc.TLS.Enabled {
 		return errors.New("can't start: TLS must be enabled")
-	}
+	}*/
 	f.user = botUser
 	f.users = users
 	var err error
@@ -126,6 +131,9 @@ func (f *fcmRelay) Start(botUser *gen.User, users []*gen.User) error {
 			return err
 		}
 	}
+	mQueue := queue.NewQueue()
+	f.messageProducer, _ = mQueue.NewProducer()
+	f.messageConsumer, _ = mQueue.NewConsumer()
 	return server.StartServer(l, f, f.config.Grpc)
 }
 
@@ -134,6 +142,7 @@ func (f *fcmRelay) send(payloadType string, v proto.Message) error {
 	if err != nil {
 		return err
 	}
+	log.Println("Sending")
 	_, err = f.client.Send(
 		context.TODO(),
 		&messaging.Message{Topic: f.topic, Data: map[string]string{
@@ -144,43 +153,30 @@ func (f *fcmRelay) send(payloadType string, v proto.Message) error {
 	return err
 }
 
-func (f *fcmRelay) PassMessage(message *gen.MessagePacket) error {
-	return f.send("message", message)
-}
-
-func (f *fcmRelay) PassEvent(event *gen.UserPacket) error {
-	return f.send("event", event)
-}
-
-func (f *fcmRelay) PassCommand(command *gen.CommandPacket) error {
-	return f.send("command", command)
-}
-
-func (f *fcmRelay) RecvMsg(packet *gen.BotPacket) error {
-	p := f.messageQueue.Pop()
-	if p == nil {
-		return errors.New("no message to read")
+func (f *fcmRelay) Send(message proto.Message) error {
+	var typ string
+	switch message.(type) {
+	case *gen.CommandPacket:
+		typ = "command"
+	case *gen.MessagePacket:
+		typ = "message"
+	case *gen.UserPacket:
+		typ = "userEvent"
+	default:
+		log.Println("unknown packet type")
+		return nil
 	}
-	packet.Message = p.Message
-	packet.Private = p.Private
-	packet.Recipient = p.Recipient
-	packet.Timestamp = p.Timestamp
-	println("Received message")
-	return nil
+	return f.send(typ, message)
 }
 
-func (f *fcmRelay) Trigger() string {
-	return "!"
+func (f *fcmRelay) Recv() (*gen.BotPacket, error) {
+	p, err := f.messageConsumer.Consume()
+	if err != nil {
+		return nil, errors.New("no message to read")
+	}
+	return p.(*gen.BotPacket), nil
 }
 
 func (f *fcmRelay) Commands() []*gen.Command {
 	return nil
-}
-
-func (f *fcmRelay) Ready() <-chan struct{} {
-	c := make(chan struct{})
-	go func() {
-		c <- struct{}{}
-	}()
-	return c
 }

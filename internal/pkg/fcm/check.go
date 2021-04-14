@@ -32,7 +32,7 @@ func LookupPortFromDNS(serverName string) ([]SRVHost, error) {
 	return hosts, nil
 }
 
-func CheckPairing(l net.Listener, config fcmRelayConfig) error {
+func CheckPairing(l net.Listener, config RelayConfig) error {
 	hosts, err := LookupPortFromDNS(config.ServerName)
 	if err != nil {
 		println("Warning:", config.ServerName, "doesn't have the required SRV record. This relay will have to be added manually to the app")
