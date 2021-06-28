@@ -153,8 +153,10 @@ github.com/raf924/bot v1.0.0-alpha.22 h1:/3QU3Ze8R1qhfPNfF44JQ9yb+FqiTR6hLHsuO5J
 github.com/raf924/bot v1.0.0-alpha.22/go.mod h1:AlDyNEa1R87KQGBuH7ZwWZv2/qIMPGIh72iIjmOn3hM=
 github.com/raf924/bot-grpc-relay v1.0.0-alpha.18 h1:QEsu3dhauc6MPDyWKzgghMtBgFS4ASb6SJrZdSIOrJY=
 github.com/raf924/bot-grpc-relay v1.0.0-alpha.18/go.mod h1:JVjDd0zBEL8N+kSX5VTAzPAIA5lj4+rNKvjfzyRWQBg=
+github.com/raf924/bot-grpc-relay v1.0.0-alpha.19/go.mod h1:kxA9hq331PGpjTmAl+hChPmeX71ZaOZUImQ+l4I1Nco=
 github.com/raf924/connector-api v1.0.0-alpha.3 h1:dQEjZBuULeTb5T+Sxw4ksVkUWLRAZVlSQMnC3207+78=
 github.com/raf924/connector-api v1.0.0-alpha.3/go.mod h1:RVRXrhb9CRqdLJ6XOzmqGRrJGznEC92PVw6iB4lFcfQ=
+github.com/raf924/connector-api v1.0.0-alpha.9/go.mod h1:RVRXrhb9CRqdLJ6XOzmqGRrJGznEC92PVw6iB4lFcfQ=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
